@@ -63,33 +63,6 @@ class GraphModel:
 
         conn.commit()
 
-    @staticmethod
-    def delete(conn: sqlite3.Connection, graph_id: str | None) -> None:
-        """Remove all persisted graph data for a graph ID.
-
-        The operation is intentionally idempotent:
-        - ``None`` or empty graph IDs are ignored
-        - deleting a non-existent graph is treated as success
-
-        Used during rollback/cleanup flows for:
-        - cancelled ingestion jobs
-        - failed indexing/training jobs
-        - orphaned partial graph creation
-        """
-
-        if not graph_id:
-            return
-
-        with conn:
-            conn.execute(
-                "DELETE FROM edges WHERE graph_id = ?",
-                (graph_id,),
-            )
-            conn.execute(
-                "DELETE FROM nodes WHERE graph_id = ?",
-                (graph_id,),
-            )
-
     def clear(self) -> None:
         self.graph.clear()
 
