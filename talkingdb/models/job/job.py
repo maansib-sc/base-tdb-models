@@ -8,6 +8,7 @@ from smart_slugify import slugify
 from talkingdb.models.job.error import JobErrorCode
 from talkingdb.models.job.stage import JobStage
 from talkingdb.models.job.state import JobState
+from talkingdb.models.job.type import JobType
 
 
 def _now_iso() -> str:
@@ -31,7 +32,7 @@ class JobModel(BaseModel):
     """
 
     job_id: str
-    idempotency_key: Optional[str] = None
+    job_type: JobType
 
     state: JobState = JobState.QUEUED
     stage: Optional[JobStage] = None
@@ -47,9 +48,6 @@ class JobModel(BaseModel):
 
     error_code: Optional[JobErrorCode] = None
     error_message: Optional[str] = None
-
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
 
     filename: Optional[str] = None
     file_size_bytes: Optional[int] = None
@@ -75,20 +73,16 @@ class JobModel(BaseModel):
     def new(
         cls,
         *,
+        job_type: JobType,
         filename: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
     ) -> "JobModel":
-        """Create a new queued ingestion job."""
+        """Create a new queued job for the given job_type."""
         now = _now_iso()
         return cls(
             job_id=cls.make_id(),
-            idempotency_key=idempotency_key,
+            job_type=job_type,
             state=JobState.QUEUED,
             filename=filename,
-            user_id=user_id,
-            session_id=session_id,
             created_at=now,
             updated_at=now,
         )
@@ -121,6 +115,7 @@ class JobModel(BaseModel):
         """
         return {
             "job_id": self.job_id,
+            "job_type": self.job_type.value,
             "state": self.state.value,
             "stage": None if self.is_terminal() else (
                 self.stage.value if self.stage else None
