@@ -92,14 +92,14 @@ class JobModel(BaseModel):
         """Return whether the job is in a terminal state."""
         return self.state.is_terminal()
 
-    def percent(self) -> Optional[int]:
+    def percent(self) -> int:
         """Return completion percentage for UI display.
 
         Returns:
-            None:
-                Progress is indeterminate.
             int:
-                Rounded completion percentage in range [0, 100].
+                0 when total_units is unknown or job is not yet processing.
+                1-99 during active indexing.
+                100 when job is COMPLETED.
         """
         if self.state == JobState.COMPLETED:
             return 100
