@@ -92,17 +92,21 @@ class JobModel(BaseModel):
         """Return whether the job is in a terminal state."""
         return self.state.is_terminal()
 
-    def percent(self) -> Optional[int]:
+    def percent(self) -> int:
         """Return completion percentage for UI display.
 
         Returns:
-            None:
-                Progress is indeterminate.
             int:
-                Rounded completion percentage in range [0, 100].
+                0 when total_units is unknown or job is not yet processing.
+                1-99 during active indexing.
+                100 when job is COMPLETED.
         """
+        if self.state == JobState.COMPLETED:
+            return 100
+        if self.state in (JobState.CANCELLING, JobState.CANCELLED):
+            return 0
         if self.total_units <= 0:
-            return None
+            return 0
         ratio = self.done_units / self.total_units
         return max(0, min(100, round(ratio * 100)))
 
@@ -117,12 +121,12 @@ class JobModel(BaseModel):
             "job_id": self.job_id,
             "job_type": self.job_type.value,
             "state": self.state.value,
-            "stage": None if self.is_terminal() else (
-                self.stage.value if self.stage else None
-            ),
-            "percent": self.percent(),
+            "stage": self.stage.value if self.stage else None,
+            "progress": self.percent(),
             "status_message": self.status_message,
             "result_graph_id": self.result_graph_id,
+            "file_name": self.filename,
+            "file_size": self.file_size_bytes,
             "result_summary": self.result_summary,
             "error_code": self.error_code.value if self.error_code else None,
             "error_message": self.error_message,
