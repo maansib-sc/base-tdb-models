@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -35,6 +35,11 @@ class JobModel(BaseModel):
     job_type: JobType
 
     session_id: Optional[str] = None
+
+    namespace: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    suggested_queries: Optional[List[str]] = None
 
     state: JobState = JobState.QUEUED
     stage: Optional[JobStage] = None
@@ -78,6 +83,10 @@ class JobModel(BaseModel):
         job_type: JobType,
         filename: Optional[str] = None,
         session_id: Optional[str] = None,
+        namespace: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        suggested_queries: Optional[List[str]] = None,
     ) -> "JobModel":
         """Create a new queued job for the given job_type."""
         now = _now_iso()
@@ -85,6 +94,10 @@ class JobModel(BaseModel):
             job_id=cls.make_id(),
             job_type=job_type,
             session_id=session_id,
+            namespace=namespace,
+            title=title,
+            description=description,
+            suggested_queries=suggested_queries,
             filename=filename,
             state=JobState.QUEUED,
             created_at=now,
@@ -135,4 +148,15 @@ class JobModel(BaseModel):
             "result_summary": self.result_summary,
             "error_code": self.error_code.value if self.error_code else None,
             "error_message": self.error_message,
+        }
+
+    def to_document_payload(self) -> Dict[str, Any]:
+        return {
+            "id": self.job_id,
+            "namespace": self.namespace,
+            "title": self.title or self.filename,
+            "description": self.description,
+            "suggested_queries": self.suggested_queries or [],
+            "result_graph_id": self.result_graph_id,
+            "state": self.state.value,
         }
