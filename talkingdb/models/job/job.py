@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
+import random
 
 from pydantic import BaseModel
 from smart_slugify import slugify
@@ -24,13 +25,27 @@ def _now_iso() -> str:
 # These are heuristic defaults. Revisit once real stage-duration data is
 # collected from job_observability logs (grouped by file size/type) - don't
 # let these numbers go stale forever.
+
+validating = random.randint(0, 3)
+parsing = random.randint(5, 9)
+element_extraction = random.randint(1, 3)
+tree_generation = random.randint(3, 7)
+persisting = random.randint(3, 7)
+
+indexing = 100 - (
+    validating
+    + parsing
+    + element_extraction
+    + tree_generation
+    + persisting
+)
 _STAGE_WEIGHTS: Dict[JobStage, int] = {
-    JobStage.VALIDATING: 2,
-    JobStage.PARSING: 15,
-    JobStage.ELEMENT_EXTRACTION: 3,
-    JobStage.TREE_GENERATION: 5,
-    JobStage.INDEXING: 70,
-    JobStage.PERSISTING: 5,
+    JobStage.VALIDATING: validating,
+    JobStage.PARSING: parsing,
+    JobStage.ELEMENT_EXTRACTION: element_extraction,
+    JobStage.TREE_GENERATION: tree_generation,
+    JobStage.INDEXING: indexing,
+    JobStage.PERSISTING: persisting,
 }
 
 
