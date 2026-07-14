@@ -95,6 +95,7 @@ class JobModel(BaseModel):
     temp_path: Optional[str] = None
 
     heartbeat_at: Optional[str] = None
+    progress_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     created_at: str = ""
@@ -183,6 +184,7 @@ class JobModel(BaseModel):
             "state": self.state.value,
             "stage": self.stage.value if self.stage else None,
             "progress": self.percent(),
+            "progress_at": self.progress_at,
             "status_message": self.status_message,
             "result_graph_id": self.result_graph_id,
             "file_name": self.filename,
