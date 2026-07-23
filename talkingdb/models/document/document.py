@@ -3,10 +3,12 @@
 import re
 import hashlib
 import zipfile
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from smart_slugify import slugify
 
+from . import table_context
 from .indexes.index import FileIndexModel, IndexItem, IndexType
 from .layouts.layout import HeaderModel
 from .layouts.layout import FooterModel
@@ -39,6 +41,8 @@ class DocumentModel:
         default_factory=dict, init=False, repr=False)
     _paragraph_order: List[str] = field(
         default_factory=list, init=False, repr=False)
+    _lead_in_index: Dict[str, str] = field(
+        default_factory=dict, init=False, repr=False)
 
     @staticmethod
     def make_id(doc_uid: str) -> str:
@@ -224,6 +228,7 @@ class DocumentModel:
 
     def invalidate_index(self):
         self._element_index.clear()
+        self._lead_in_index.clear()
 
     def assign_ids(self, doc_index: int = 0):
         self.id = f"doc::{doc_index}"
@@ -614,6 +619,41 @@ class DocumentModel:
                 break
 
         return path
+
+    def get_table_context(self, table: TableModel) -> List[str]:
+        context = self._get_heading_path(table)
+
+        if table.caption_ref_id:
+            caption = self.get_element_by_id(table.caption_ref_id)
+            if caption:
+                text = (caption.to_text() or "").strip()
+                if text:
+                    context.append(text)
+
+        lead_in = self._build_lead_in_index().get(table.id)
+        if lead_in:
+            context.append(lead_in)
+
+        return context
+
+    def _build_lead_in_index(self) -> Dict[str, str]:
+        if self._lead_in_index:
+            return self._lead_in_index
+
+        recent: deque = deque(maxlen=table_context.TABLE_LEAD_IN_MAX_PARAGRAPHS)
+
+        for elem in self.iter_elements():
+            if isinstance(elem, TableModel):
+                if recent:
+                    self._lead_in_index[elem.id] = table_context.bounded_lead_in(recent)
+                continue
+
+            if isinstance(elem, ParagraphModel):
+                text = (elem.to_text() or "").strip()
+                if table_context.is_lead_in(text):
+                    recent.append(text)
+
+        return self._lead_in_index
 
     def _get_heading_path_for_heading(self, heading: ParagraphModel) -> List[str]:
         path = self._get_heading_path(heading)

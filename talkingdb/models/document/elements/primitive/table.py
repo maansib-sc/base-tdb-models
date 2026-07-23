@@ -1,5 +1,6 @@
 
 from dataclasses import dataclass, field
+from enum import Enum
 from html.parser import HTMLParser
 from typing import List, Optional
 from ..base.base import make_id, RunModel
@@ -45,6 +46,48 @@ class _HTMLTableParser(HTMLParser):
             self._current_row = None
 
 
+class HeaderOrientation(str, Enum):
+    NONE = "none"
+    ROW = "row"
+    COLUMN = "column"
+    BOTH = "both"
+
+
+def cell_to_text(cell: Optional["TableCellModel"]) -> str:
+    return cell.to_text(strip=True) if cell is not None else ""
+
+
+@dataclass
+class TableCellView:
+    row: int
+    col: int
+    text: str
+    row_header: str = ""
+    col_header: str = ""
+    id: Optional[str] = None
+
+
+@dataclass
+class TableRowView:
+    index: int
+    header: str
+    cells: List[TableCellView] = field(default_factory=list)
+
+    def to_text(self) -> str:
+        """Return self-contained table rows."""
+        parts = [
+            f"{c.col_header}: {c.text}"
+            if c.col_header and c.col_header != self.header
+            else c.text
+            for c in self.cells
+        ]
+
+        if self.header and parts:
+            return f"{self.header} | " + " | ".join(parts)
+
+        return self.header or " | ".join(parts)
+
+
 @dataclass
 class TableCellModel:
     paragraphs: List[ParagraphModel] = field(default_factory=list)
@@ -68,10 +111,11 @@ class TableCellModel:
         for i, para in enumerate(self.paragraphs):
             para.assign_ids(self.id, i)
 
-    def to_text(self, mode="full") -> str:
-        return "\n".join(
+    def to_text(self, mode="full", strip: bool = False) -> str:
+        text = "\n".join(
             p.to_text(mode) for p in self.paragraphs if p is not None
         )
+        return text.strip() if strip else text
 
     def to_html(self) -> str:
         attrs = []
@@ -333,6 +377,87 @@ class TableModel:
         if self.get_type() == "Keyvalue":
             return self.get_row_header(row, format, mode)
         return self.get_col_header(col, format, mode)
+
+    def header_orientation(self) -> HeaderOrientation:
+        table_type = self.get_type()
+
+        if table_type == "Layout":
+            return HeaderOrientation.NONE
+        if table_type == "Keyvalue":
+            return HeaderOrientation.ROW
+        return HeaderOrientation.BOTH
+
+    def header_row_count(self) -> int:
+        if self.header_orientation() not in (
+            HeaderOrientation.COLUMN,
+            HeaderOrientation.BOTH,
+        ):
+            return 0
+        if not self.rows or not self.rows[0]:
+            return 1
+        return max((cell.rowspan for cell in self.rows[0] if cell), default=1)
+
+    def column_headers(self) -> dict:
+        headers: dict = {}
+
+        for row in self.rows[: self.header_row_count()]:
+            for col, cell in enumerate(row):
+                text = cell_to_text(cell)
+                if not text:
+                    continue
+                headers[col] = (
+                    f"{headers[col]} {text}".strip() if col in headers else text
+                )
+
+        return headers
+
+    def row_headers(self) -> dict:
+        return {
+            row_idx: cell_to_text(row[0])
+            for row_idx, row in enumerate(self.rows)
+            if row
+        }
+
+    def normalized_rows(self) -> List[TableRowView]:
+        if not self.rows:
+            return []
+
+        has_row_header = self.header_orientation() in (
+            HeaderOrientation.ROW,
+            HeaderOrientation.BOTH,
+        )
+
+        header_count = self.header_row_count()
+        col_headers = self.column_headers()
+        first_col = 1 if has_row_header else 0
+
+        views: List[TableRowView] = []
+
+        for row_idx, row in enumerate(self.rows):
+            if not row or row_idx < header_count:
+                continue
+
+            row_header = cell_to_text(row[0]) if has_row_header else ""
+
+            cells = [
+                TableCellView(
+                    row=row_idx,
+                    col=col,
+                    text=cell_to_text(cell),
+                    row_header=row_header,
+                    col_header=col_headers.get(col, ""),
+                    id=getattr(cell, "id", None),
+                )
+                for col, cell in enumerate(row)
+                if col >= first_col and cell_to_text(cell)
+            ]
+
+            if row_header or cells:
+                views.append(
+                    TableRowView(index=row_idx, header=row_header, cells=cells)
+                )
+
+        return views
 
     @staticmethod
     def from_html_or_text(content: str) -> "TableModel":
