@@ -14,4 +14,5 @@ class JobErrorCode(str, Enum):
     INDEX_ERROR = "INDEX_ERROR"             # tokenizer / symbol-gen / graph build
     PERSIST_ERROR = "PERSIST_ERROR"         # SQLite write failure
     TIMEOUT = "TIMEOUT"                     # exceeded MAX_JOB_DURATION
+    STUCK = "STUCK"                         # heartbeat alive, no progress for too long
     INTERNAL_ERROR = "INTERNAL_ERROR"       # unclassified / orphaned

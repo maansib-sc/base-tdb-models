@@ -45,7 +45,9 @@ class GraphModel:
         conn: sqlite3.Connection,
         overwrite: bool = True,
         *,
-        batch_size: int = 5000,
+        # Keep batches small to avoid holding SQLite's single write lock for too long,
+        # allowing other writers (e.g. heartbeat updates) to proceed between commits.
+        batch_size: int = 500,
     ) -> None:
         cur = conn.cursor()
 
