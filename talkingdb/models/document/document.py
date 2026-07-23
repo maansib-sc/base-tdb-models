@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from smart_slugify import slugify
 
+from . import table_context
 from .indexes.index import FileIndexModel, IndexItem, IndexType
 from .layouts.layout import HeaderModel
 from .layouts.layout import FooterModel
@@ -25,49 +26,6 @@ from ..utils.dataclass import from_dict_safe
 def get_doc_uid(id: str) -> str:
     match = re.match(r'^doc::([^:]+)', id)
     return match.group(1)
-
-TABLE_LEAD_IN_MAX_PARAGRAPHS = 5
-TABLE_LEAD_IN_MAX_CHARS = 300
-
-TABLE_LEAD_IN_STOPWORDS = frozenset({
-    "table of contents",
-    "list of tables",
-    "list of figures",
-})
-
-
-def _is_lead_in(text: str) -> bool:
-    if not text:
-        return False
-
-    normalized = " ".join(text.split())
-    if len(normalized) < 4:
-        return False
-
-    lowered = normalized.lower()
-
-    if lowered.replace("f", "").replace("-", "").replace(" ", "").isdigit():
-        return False
-
-    if lowered.rstrip("0123456789 .-") in TABLE_LEAD_IN_STOPWORDS:
-        return False
-
-    return True
-
-
-def _bounded_lead_in(paragraphs) -> str:
-    selected = []
-    total = 0
-
-    for text in reversed(paragraphs):
-        if total >= TABLE_LEAD_IN_MAX_CHARS:
-            break
-        snippet = text[: TABLE_LEAD_IN_MAX_CHARS - total]
-        selected.append(snippet)
-        total += len(snippet)
-
-    selected.reverse()
-    return " ".join(selected)
 
 
 @dataclass
@@ -682,17 +640,17 @@ class DocumentModel:
         if self._lead_in_index:
             return self._lead_in_index
 
-        recent: deque = deque(maxlen=TABLE_LEAD_IN_MAX_PARAGRAPHS)
+        recent: deque = deque(maxlen=table_context.TABLE_LEAD_IN_MAX_PARAGRAPHS)
 
         for elem in self.iter_elements():
             if isinstance(elem, TableModel):
                 if recent:
-                    self._lead_in_index[elem.id] = _bounded_lead_in(recent)
+                    self._lead_in_index[elem.id] = table_context.bounded_lead_in(recent)
                 continue
 
             if isinstance(elem, ParagraphModel):
                 text = (elem.to_text() or "").strip()
-                if _is_lead_in(text):
+                if table_context.is_lead_in(text):
                     recent.append(text)
 
         return self._lead_in_index

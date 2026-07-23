@@ -1,5 +1,6 @@
 
 from dataclasses import dataclass, field
+from enum import Enum
 from html.parser import HTMLParser
 from typing import List, Optional
 from ..base.base import make_id, RunModel
@@ -45,16 +46,15 @@ class _HTMLTableParser(HTMLParser):
             self._current_row = None
 
 
-HEADER_NONE = "none"
-HEADER_ROW = "row"
-HEADER_COLUMN = "column"
-HEADER_BOTH = "both"
+class HeaderOrientation(str, Enum):
+    NONE = "none"
+    ROW = "row"
+    COLUMN = "column"
+    BOTH = "both"
 
 
 def cell_to_text(cell: Optional["TableCellModel"]) -> str:
-    if cell is None:
-        return ""
-    return (cell.to_text() or "").strip()
+    return cell.to_text(strip=True) if cell is not None else ""
 
 
 @dataclass
@@ -111,10 +111,11 @@ class TableCellModel:
         for i, para in enumerate(self.paragraphs):
             para.assign_ids(self.id, i)
 
-    def to_text(self, mode="full") -> str:
-        return "\n".join(
+    def to_text(self, mode="full", strip: bool = False) -> str:
+        text = "\n".join(
             p.to_text(mode) for p in self.paragraphs if p is not None
         )
+        return text.strip() if strip else text
 
     def to_html(self) -> str:
         attrs = []
@@ -377,16 +378,21 @@ class TableModel:
             return self.get_row_header(row, format, mode)
         return self.get_col_header(col, format, mode)
 
-    def header_orientation(self) -> str:
+    def header_orientation(self) -> HeaderOrientation:
         table_type = self.get_type()
 
         if table_type == "Layout":
-            return HEADER_NONE
+            return HeaderOrientation.NONE
         if table_type == "Keyvalue":
-            return HEADER_ROW
-        return HEADER_BOTH
+            return HeaderOrientation.ROW
+        return HeaderOrientation.BOTH
 
     def header_row_count(self) -> int:
+        if self.header_orientation() not in (
+            HeaderOrientation.COLUMN,
+            HeaderOrientation.BOTH,
+        ):
+            return 0
         if not self.rows or not self.rows[0]:
             return 1
         return max((cell.rowspan for cell in self.rows[0] if cell), default=1)
@@ -416,12 +422,13 @@ class TableModel:
         if not self.rows:
             return []
 
-        orientation = self.header_orientation()
-        has_row_header = orientation in (HEADER_ROW, HEADER_BOTH)
-        has_col_header = orientation in (HEADER_COLUMN, HEADER_BOTH)
+        has_row_header = self.header_orientation() in (
+            HeaderOrientation.ROW,
+            HeaderOrientation.BOTH,
+        )
 
-        header_count = self.header_row_count() if has_col_header else 0
-        col_headers = self.column_headers() if has_col_header else {}
+        header_count = self.header_row_count()
+        col_headers = self.column_headers()
         first_col = 1 if has_row_header else 0
 
         views: List[TableRowView] = []
